@@ -6,3 +6,17 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+actix = "0.13.3"
+actix-web = "4.5.1"
+chrono = "0.4.38"
+dotenv = "0.15.0"
+env_logger = "0.11.3"
+envy = "0.4.2"
+lazy_static = "1.4.0"
+log = "0.4.21"
+redis = { version = "0.25.3", features = ["tokio-comp"] }
+serde = "1.0.202"
+serde_derive = "1.0.202"
+serde_json = "1.0.117"
+sqlx = {version = "0.7.4", features = ["runtime-async-std-native-tls", "postgres"] }
+uuid = { version = "1.8.0", features = ["serde", "v4"] }
