@@ -7,6 +7,8 @@ pub struct Config {
     pub app_version: String,
     pub log_level: String,
     pub redis_url: String,
+    pub cmc_api_key: String,
+    pub cmc_token_id_endpoint: String,
 }
 
 lazy_static! {

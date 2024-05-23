@@ -1,11 +1,13 @@
 use actix_web::{App, HttpServer, middleware, web};
 use dotenv::dotenv;
 use env_logger::Builder;
-use log::{error, info};
+use log::{debug, error, info};
 use sqlx::{Pool, Postgres};
 use crate::config::CONFIG;
 use crate::database::create_pool;
 use std::io::Write;
+use crate::data_provider::{retrieve_data};
+
 pub struct AppState {
     pub db: Pool<Postgres>,
 }
@@ -34,6 +36,14 @@ pub async fn server() -> std::io::Result<()> {
         }
         Err(err) => {
             error!("Failed to create database pool: {}", err);
+            std::process::exit(1);
+        }
+    }
+
+    match retrieve_data(pool.clone()).await {
+        Ok(()) => debug!("data has been fed to db successfully."),
+        Err(err) => {
+            error!("There is an error when trying to feed the data to db: {}", err);
             std::process::exit(1);
         }
     }

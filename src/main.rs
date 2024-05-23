@@ -1,6 +1,7 @@
 mod server;
 mod database;
 mod config;
+mod data_provider;
 
 #[macro_use]
 extern crate lazy_static;
