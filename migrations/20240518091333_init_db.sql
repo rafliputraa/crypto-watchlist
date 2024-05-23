@@ -11,8 +11,8 @@ CREATE TABLE assets (
                         name VARCHAR(255),
                         symbol VARCHAR(255) UNIQUE NOT NULL,
                         slug VARCHAR(255),
-                        first_historical_data TIMESTAMP,
-                        last_historical_data TIMESTAMP
+                        first_historical_data TIMESTAMP WITH TIME ZONE,
+                        last_historical_data TIMESTAMP WITH TIME ZONE
 );
 
 CREATE TABLE watchlist_groups (
