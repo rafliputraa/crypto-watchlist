@@ -1,15 +1,10 @@
 use std::error::Error;
-use std::{fs, io, time};
-use std::fs::File;
-use std::io::copy;
-use std::str::FromStr;
 use std::time::Duration;
-use chrono::{DateTime, TimeZone, Utc, ParseError};
+use chrono::{DateTime, Utc};
 use log::{debug, error};
-use reqwest::{Client, ClientBuilder};
+use reqwest::ClientBuilder;
 use crate::config::CONFIG;
-use futures_util::StreamExt;
-use sqlx::{Executor, Pool, Postgres};
+use sqlx::{Pool, Postgres};
 
 #[derive(Debug, Deserialize)]
 pub struct CMCAPIResponse {
@@ -48,7 +43,7 @@ pub struct Platform {
     tokenAddress: String,
 }
 
-pub async fn retrieve_data(db_conn: Pool<Postgres>) -> Result<(), Box<dyn Error>> {
+pub async fn feed_assets_data(db_conn: Pool<Postgres>) -> Result<(), Box<dyn Error>> {
     let client = ClientBuilder::new()
         .timeout(Duration::from_secs(20))
         .build().unwrap();
@@ -82,10 +77,8 @@ pub async fn retrieve_data(db_conn: Pool<Postgres>) -> Result<(), Box<dyn Error>
     // Insert the TokenInfo data into PostgreSQL
     for token in api_response.data {
         debug!("The symbol: {}", &token.symbol);
-        let first_historical_data = DateTime::<Utc>::from_str(&token.first_historical_data)
-            .expect("Failed to parse time");
-        let last_historical_data = DateTime::<Utc>::from_str(&token.last_historical_data)
-            .expect("Failed to parse time");
+        let first_historical_data = &token.first_historical_data.parse::<DateTime<Utc>>()?;
+        let last_historical_data = &token.last_historical_data.parse::<DateTime<Utc>>()?;
         sqlx::query(
             r#"INSERT INTO assets (id, name, symbol, slug, first_historical_data, last_historical_data)
                VALUES ($1, $2, $3, $4, $5, $6)
@@ -94,8 +87,8 @@ pub async fn retrieve_data(db_conn: Pool<Postgres>) -> Result<(), Box<dyn Error>
             .bind(&token.name)
             .bind(&token.symbol)
             .bind(&token.slug)
-            .bind(first_historical_data.to_rfc3339())
-            .bind(last_historical_data.to_rfc3339())
+            .bind(first_historical_data)
+            .bind(last_historical_data)
             .execute(&db_conn)
             .await?;
     }

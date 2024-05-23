@@ -6,7 +6,7 @@ use sqlx::{Pool, Postgres};
 use crate::config::CONFIG;
 use crate::database::create_pool;
 use std::io::Write;
-use crate::data_provider::{retrieve_data};
+use crate::data_provider::feed_assets_data;
 
 pub struct AppState {
     pub db: Pool<Postgres>,
@@ -40,11 +40,13 @@ pub async fn server() -> std::io::Result<()> {
         }
     }
 
-    match retrieve_data(pool.clone()).await {
-        Ok(()) => debug!("data has been fed to db successfully."),
-        Err(err) => {
-            error!("There is an error when trying to feed the data to db: {}", err);
-            std::process::exit(1);
+    if CONFIG.is_feed_assets_data_enabled {
+        match feed_assets_data(pool.clone()).await {
+            Ok(()) => debug!("data has been fed to db successfully."),
+            Err(err) => {
+                error!("There is an error when trying to feed the data to db: {}", err);
+                std::process::exit(1);
+            }
         }
     }
 
