@@ -6,9 +6,6 @@ pub async fn create_pool() -> Result<Pool<Postgres>, sqlx::Error> {
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&CONFIG.database_url).await?;
-    sqlx::migrate!("./migrations")
-        .run(&pool)
-        .await?;
 
     let ping_response = sqlx::query("SELECT 1 + 1 as sum")
         .fetch_one(&pool)

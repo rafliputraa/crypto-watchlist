@@ -95,8 +95,3 @@ pub async fn feed_assets_data(db_conn: Pool<Postgres>) -> Result<(), Box<dyn Err
 
     Ok(())
 }
-
-pub async fn feed_data() -> Result<(), Box<dyn Error>> {
-
-    Ok(())
-}

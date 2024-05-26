@@ -7,6 +7,7 @@ use crate::config::CONFIG;
 use crate::database::create_pool;
 use std::io::Write;
 use crate::data_provider::feed_assets_data;
+use crate::routes::routes;
 
 pub struct AppState {
     pub db: Pool<Postgres>,
@@ -58,6 +59,7 @@ pub async fn server() -> std::io::Result<()> {
             .app_data(web::Data::new(AppState{
                 db: pool.clone(),
             }))
+            .configure(routes)
     });
     server.bind(&CONFIG.server)?.run().await
 }

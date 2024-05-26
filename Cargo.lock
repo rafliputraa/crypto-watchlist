@@ -799,6 +799,7 @@ dependencies = [
  "actix",
  "actix-web",
  "chrono",
+ "derive_more",
  "dotenv",
  "env_logger",
  "envy",
