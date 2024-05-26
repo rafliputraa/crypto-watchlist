@@ -1,7 +1,9 @@
+use std::sync::Arc;
 use actix_web::HttpResponse;
 use actix_web::web::{Data, Json, Path, Query};
-use chrono::NaiveDateTime;
-use log::debug;
+use sqlx::{Arguments, Row};
+use sqlx::postgres::PgArguments;
+use crate::database::Database;
 use crate::errors::ApiError;
 use crate::helpers::{format_datetime, respond_json, respond_ok};
 use crate::server::AppState;
@@ -36,22 +38,23 @@ pub async fn retrieve_all_watchlist_groups(
 )
     -> Result<Json<Vec<WatchlistGroupResponse>>, ApiError> {
     let user_id = path.into_inner();
-    let records = sqlx::query!(
-        "SELECT * FROM watchlist_groups WHERE user_id = $1",
-        user_id)
-        .fetch_all(&state.db).await?;
-    let mut response = Vec::new();
-    for record in records.iter() {
-        let watchlist_group = WatchlistGroupResponse {
-            id: record.id,
-            user_id,
-            name: record.name.clone(),
-            created_at: format_datetime(record.created_at),
-        };
-        response.push(watchlist_group)
-    };
+    let mut args = PgArguments::default();
+    args.add(user_id);
 
-    respond_json(response)
+    let records = state.db
+        .fetch_all("SELECT * FROM watchlist_groups WHERE user_id = $1", args)
+        .await?;
+    let watchlist_groups: Vec<WatchlistGroupResponse> = records
+        .iter()
+        .map(|record| WatchlistGroupResponse {
+            id: record.get("id"),
+            user_id,
+            name: record.get("name"),
+            created_at: format_datetime(record.get("created_at")),
+        })
+        .collect();
+
+    respond_json(watchlist_groups)
 }
 
 pub async fn create_watchlist_group(
@@ -60,21 +63,22 @@ pub async fn create_watchlist_group(
     body: Json<WatchlistGroupCreateRequest>
 ) -> Result<Json<WatchlistGroupResponse>, ApiError> {
     let user_id = path.into_inner();
+    let mut args = PgArguments::default();
+    args.add(user_id);
+    args.add(&body.name);
 
-    let result = sqlx::query!(
-        "INSERT INTO watchlist_groups (user_id, name) VALUES ($1, $2) RETURNING id, created_at",
-        user_id, body.name
-    )
-        .fetch_one(&state.db).await?;
+    let record = state.db
+        .fetch_one("INSERT INTO watchlist_groups (user_id, name) VALUES ($1, $2) RETURNING id, created_at", args)
+        .await?;
 
-    let response = WatchlistGroupResponse {
-        id: result.id,
+    let watchlist_group = WatchlistGroupResponse {
+        id: record.get("id"),
         user_id,
         name: body.name.clone(),
-        created_at: format_datetime(result.created_at),
+        created_at: format_datetime(record.get("created_at")),
     };
 
-    respond_json(response)
+    respond_json(watchlist_group)
 }
 
 pub async fn update_watchlist_group(
@@ -84,15 +88,19 @@ pub async fn update_watchlist_group(
 )
     -> Result<Json<WatchlistGroupResponse>, ApiError> {
     let user_id = path.into_inner();
-    let record = sqlx::query!(
-        "UPDATE watchlist_groups SET name = COALESCE($1, name) WHERE user_id = $2 AND id = $3 RETURNING name, created_at",
-        body.name, user_id, body.id)
-        .fetch_one(&state.db).await?;
+    let mut args = PgArguments::default();
+    args.add(&body.name);
+    args.add(user_id);
+    args.add(&body.id);
+
+    let record = state.db
+        .fetch_one("UPDATE watchlist_groups SET name = COALESCE($1, name) WHERE user_id = $2 AND id = $3 RETURNING name, created_at", args)
+        .await?;
     let watchlist_group = WatchlistGroupResponse {
         id: body.id,
         user_id,
-        name: record.name,
-        created_at: format_datetime(record.created_at),
+        name: record.get("name"),
+        created_at: format_datetime(record.get("created_at")),
     };
 
     respond_json(watchlist_group)
@@ -105,14 +113,15 @@ pub async fn delete_watchlist_group(
 ) -> Result<HttpResponse, ApiError> {
     let user_id = path.into_inner();
     let group_id = query.into_inner();
+    let mut args = PgArguments::default();
+    args.add(group_id.id);
+    args.add(user_id);
 
-    let result = sqlx::query!(
-        "DELETE FROM watchlist_groups WHERE id = $1 AND user_id = $2",
-        group_id.id, user_id
-    )
-        .execute(&state.db).await?;
+    let record = state.db
+        .execute("DELETE FROM watchlist_groups WHERE id = $1 AND user_id = $2", args)
+        .await?;
 
-    if result.rows_affected() == 0 {
+    if record.rows_affected() == 0 {
         return Err(ApiError::NotFound);
     }
 

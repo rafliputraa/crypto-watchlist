@@ -6,8 +6,8 @@ use sqlx::Error;
 
 #[derive(Debug, Display, Error)]
 pub enum ApiError {
-    #[display(fmt = "Bad request")]
-    BadRequest,
+    #[display(fmt = "Bad request: {}", _0)]
+    BadRequest(String),
     #[display(fmt = "Internal server error")]
     InternalServerError,
     #[display(fmt = "The data is not found")]
@@ -28,7 +28,7 @@ impl ErrorResponse {
 impl ResponseError for ApiError {
     fn status_code(&self) -> StatusCode {
         match *self {
-            ApiError::BadRequest => StatusCode::BAD_REQUEST,
+            ApiError::BadRequest(_) => StatusCode::BAD_REQUEST,
             ApiError::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::NotFound => StatusCode::NOT_FOUND,
         }
