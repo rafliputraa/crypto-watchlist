@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use actix_web::HttpResponse;
 use actix_web::web::{Data, Json, Path, Query};
 use sqlx::{Arguments, Row};

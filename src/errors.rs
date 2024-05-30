@@ -4,7 +4,7 @@ use actix_web::http::StatusCode;
 use derive_more::{Display, Error};
 use sqlx::Error;
 
-#[derive(Debug, Display, Error)]
+#[derive(Debug, Display)]
 pub enum ApiError {
     #[display(fmt = "Bad request: {}", _0)]
     BadRequest(String),

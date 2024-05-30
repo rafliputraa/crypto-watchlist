@@ -10,10 +10,6 @@ pub trait Database: Send + Sync {
     async fn fetch_all(&self, query: &str, args: PgArguments) -> Result<Vec<PgRow>, Error>;
     async fn fetch_one(&self, query: &str, args: PgArguments) -> Result<PgRow, Error>;
     async fn fetch_optional(&self, query: &str, args: PgArguments) -> Result<Option<PgRow>, Error>;
-
-    async fn begin_transaction(&self) -> Result<Transaction<'_, Postgres>, Error>;
-    async fn commit_transaction(transaction: Transaction<'_, Postgres>) -> Result<(), Error>;
-    async fn rollback_transaction(transaction: Transaction<'_, Postgres>) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -32,18 +28,6 @@ impl Database for PostgresDB {
 
     async fn fetch_optional(&self, query: &str, args: PgArguments) -> Result<Option<PgRow>, Error> {
         sqlx::query_with(query, args).fetch_optional(&self.pool).await
-    }
-
-    async fn begin_transaction(&self) -> Result<Transaction<'_, Postgres>, Error> {
-        self.pool.begin().await
-    }
-
-    async fn commit_transaction(transaction: Transaction<'_, Postgres>) -> Result<(), Error> {
-        transaction.commit().await
-    }
-
-    async fn rollback_transaction(transaction: Transaction<'_, Postgres>) -> Result<(), Error> {
-        transaction.rollback().await
     }
 }
 

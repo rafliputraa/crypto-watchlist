@@ -15,9 +15,6 @@ extern crate lazy_static;
 #[macro_use]
 extern crate serde_derive;
 
-#[macro_use]
-extern crate sqlx;
-
 use server::server;
 
 #[actix_web::main]
