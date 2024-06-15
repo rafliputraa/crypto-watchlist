@@ -1,14 +1,13 @@
 use std::sync::Arc;
 use actix_web::HttpResponse;
 use actix_web::web::{Data, Json, Path};
-use sqlx::{Arguments, Error, Executor, PgPool, Postgres, Row, Transaction};
-use sqlx::postgres::any::AnyConnectionBackend;
+use sqlx::{Arguments, Executor, Row};
 use sqlx::postgres::PgArguments;
-use crate::database::{Database, PostgresDB};
+use crate::database::Database;
 use crate::errors::ApiError;
-use crate::helpers::{format_datetime, respond_json, respond_ok};
+use crate::errors::ApiError::{BadRequest, InternalServerError};
+use crate::helpers::{respond_json, respond_ok};
 use crate::server::AppState;
-use crate::watchlistgroup::{WatchlistGroupCreateRequest, WatchlistGroupResponse};
 
 #[derive(Debug, Serialize)]
 pub struct WatchlistResponse {
@@ -18,14 +17,16 @@ pub struct WatchlistResponse {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct WatchlistRetrieveRequest {
-    group_id: i32,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct WatchlistCreateRequest {
     group_id: i32,
     asset_id: i32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WatchlistDeleteRequest {
+    group_id: i32,
+    asset_id: i32,
+    user_id: i32,
 }
 
 async fn check_exists(db: &Arc<dyn Database>, table_name: &str, id: i32) -> Result<bool, ApiError> {
@@ -74,4 +75,65 @@ pub async fn create_watchlist(
     respond_ok()
 }
 
-// TODO: Add more handler to get and delete watchlist.
+pub async fn retrieve_all_watchlist(
+    state: Data<AppState>,
+    path: Path<i32>
+) -> Result<Json<Vec<WatchlistResponse>>, ApiError> {
+    let watchlistgroup_id = path.into_inner();
+    let mut args = PgArguments::default();
+    let mut watchlist: Vec<WatchlistResponse> = vec![];
+    args.add(watchlistgroup_id);
+
+    let records = state.db
+        .fetch_all("SELECT a.id, a.name, a.symbol FROM watchlist w JOIN assets a ON w.asset_id = a.id where w.group_id = $1", args)
+        .await?;
+
+    if records.is_empty() {
+        return respond_json(watchlist);
+    }
+
+    watchlist = records
+        .iter()
+        .map(|record| WatchlistResponse {
+        id: record.get("id"),
+        name: record.get("name"),
+        symbol: record.get("symbol"),
+    }).collect();
+
+    respond_json(watchlist)
+}
+
+pub async fn delete_watchlist(
+    state: Data<AppState>,
+    body: Json<WatchlistDeleteRequest>
+) -> Result<HttpResponse, ApiError> {
+    // Check if data is existed
+    let mut select_args = PgArguments::default();
+    select_args.add(&body.group_id);
+    select_args.add(&body.user_id);
+
+    let record = state.db
+        .fetch_one("SELECT w.asset_id FROM watchlist w
+    JOIN watchlist_groups wg ON w.group_id = wg.id
+    JOIN users u ON wg.user_id = u.id WHERE wg.id = $1 AND wg.user_id = $2", select_args)
+        .await?;
+
+    if record.is_empty() {
+        return Err(BadRequest("Watchlist not found".into()));
+    }
+
+    let mut args = PgArguments::default();
+    args.add(&body.asset_id);
+    args.add(&body.group_id);
+
+
+    let record = state.db
+        .execute("DELETE FROM watchlist WHERE asset_id = $1 and group_id = $2", args)
+        .await?;
+
+    if record.rows_affected() == 0 {
+        return Err(InternalServerError);
+    }
+
+    respond_ok()
+}
