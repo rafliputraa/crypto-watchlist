@@ -1,10 +1,13 @@
 use std::error::Error;
+use std::sync::Arc;
 use std::time::Duration;
 use chrono::{DateTime, Utc};
 use log::{debug, error};
 use reqwest::ClientBuilder;
 use crate::config::CONFIG;
-use sqlx::{Pool, Postgres};
+use sqlx::{Arguments, Pool, Postgres};
+use sqlx::postgres::PgArguments;
+use crate::database::{Database, PostgresDB};
 
 #[derive(Debug, Deserialize)]
 pub struct CMCAPIResponse {
@@ -24,8 +27,8 @@ pub struct Status {
 
 #[derive(Debug, Deserialize)]
 pub struct TokenInfo {
-    id: u32,
-    rank: u32,
+    id: i32,
+    rank: i32,
     name: String,
     symbol: String,
     slug: String,
@@ -43,7 +46,7 @@ pub struct Platform {
     tokenAddress: String,
 }
 
-pub async fn feed_assets_data(db_conn: Pool<Postgres>) -> Result<(), Box<dyn Error>> {
+pub async fn feed_assets_data(db_conn: Arc<PostgresDB>) -> Result<(), Box<dyn Error>> {
     let client = ClientBuilder::new()
         .timeout(Duration::from_secs(20))
         .build().unwrap();
@@ -75,28 +78,24 @@ pub async fn feed_assets_data(db_conn: Pool<Postgres>) -> Result<(), Box<dyn Err
     let api_response: CMCAPIResponse = serde_json::from_slice(&bytes)?;
 
     // Insert the TokenInfo data into PostgreSQL
-    for token in api_response.data {
-        debug!("The symbol: {}", &token.symbol);
-        let first_historical_data = &token.first_historical_data.parse::<DateTime<Utc>>()?;
-        let last_historical_data = &token.last_historical_data.parse::<DateTime<Utc>>()?;
-        sqlx::query(
-            r#"INSERT INTO assets (id, name, symbol, slug, first_historical_data, last_historical_data)
-               VALUES ($1, $2, $3, $4, $5, $6)
-               ON CONFLICT (id) DO NOTHING"#)
-            .bind(token.id as i32)
-            .bind(&token.name)
-            .bind(&token.symbol)
-            .bind(&token.slug)
-            .bind(first_historical_data)
-            .bind(last_historical_data)
-            .execute(&db_conn)
+    for asset in api_response.data {
+        debug!("The symbol: {}", &asset.symbol);
+        let first_historical_data = &asset.first_historical_data.parse::<DateTime<Utc>>()?;
+        let last_historical_data = &asset.last_historical_data.parse::<DateTime<Utc>>()?;
+        let mut args = PgArguments::default();
+        args.add(&asset.id);
+        args.add(&asset.name);
+        args.add(&asset.symbol);
+        args.add(&asset.slug);
+        args.add(first_historical_data);
+        args.add(last_historical_data);
+
+        db_conn
+            .execute(r#"INSERT INTO assets (id, name, symbol, slug, first_historical_data, last_historical_data)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        ON CONFLICT (id) DO NOTHING"#, args)
             .await?;
     }
-
-    Ok(())
-}
-
-pub async fn feed_data() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }

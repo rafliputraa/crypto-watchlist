@@ -2,6 +2,12 @@ mod server;
 mod database;
 mod config;
 mod data_provider;
+mod routes;
+mod health;
+mod errors;
+mod helpers;
+mod watchlist;
+mod watchlistgroup;
 
 #[macro_use]
 extern crate lazy_static;

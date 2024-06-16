@@ -4,12 +4,14 @@ use env_logger::Builder;
 use log::{debug, error, info};
 use sqlx::{Pool, Postgres};
 use crate::config::CONFIG;
-use crate::database::create_pool;
+use crate::database::{create_pool, Database, PostgresDB};
 use std::io::Write;
+use std::sync::Arc;
 use crate::data_provider::feed_assets_data;
+use crate::routes::routes;
 
 pub struct AppState {
-    pub db: Pool<Postgres>,
+    pub db: Arc<dyn Database>,
 }
 
 pub async fn server() -> std::io::Result<()> {
@@ -58,6 +60,7 @@ pub async fn server() -> std::io::Result<()> {
             .app_data(web::Data::new(AppState{
                 db: pool.clone(),
             }))
+            .configure(routes)
     });
     server.bind(&CONFIG.server)?.run().await
 }
