@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use actix_web::HttpResponse;
+use actix_web::{HttpMessage, HttpRequest, HttpResponse};
 use actix_web::web::{Data, Json, Path};
 use sqlx::{Arguments, Executor, Row};
 use sqlx::postgres::PgArguments;
@@ -7,6 +7,7 @@ use crate::database::Database;
 use crate::errors::ApiError;
 use crate::errors::ApiError::{BadRequest, InternalServerError};
 use crate::helpers::{respond_json, respond_ok};
+use crate::middleware_custom::Claims;
 use crate::server::AppState;
 
 #[derive(Debug, Serialize)]
@@ -17,16 +18,9 @@ pub struct WatchlistResponse {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct WatchlistCreateRequest {
+pub struct WatchlistCreateOrDeleteRequest {
     group_id: i32,
     asset_id: i32,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct WatchlistDeleteRequest {
-    group_id: i32,
-    asset_id: i32,
-    user_id: i32,
 }
 
 async fn check_exists(db: &Arc<dyn Database>, table_name: &str, id: i32) -> Result<bool, ApiError> {
@@ -45,7 +39,7 @@ async fn check_exists(db: &Arc<dyn Database>, table_name: &str, id: i32) -> Resu
 
 pub async fn create_watchlist(
     state: Data<AppState>,
-    body: Json<WatchlistCreateRequest>
+    body: Json<WatchlistCreateOrDeleteRequest>
 ) -> Result<HttpResponse, ApiError> {
     // Check if the group_id exists
     let group_exists = check_exists(&state.db, "watchlist_groups", body.group_id).await?;
@@ -105,12 +99,14 @@ pub async fn retrieve_all_watchlist(
 
 pub async fn delete_watchlist(
     state: Data<AppState>,
-    body: Json<WatchlistDeleteRequest>
+    body: Json<WatchlistCreateOrDeleteRequest>,
+    request: HttpRequest
 ) -> Result<HttpResponse, ApiError> {
+    let user_id = request.extensions().get::<Claims>().unwrap().user_id;
     // Check if data is existed
     let mut select_args = PgArguments::default();
     select_args.add(&body.group_id);
-    select_args.add(&body.user_id);
+    select_args.add(user_id);
 
     let record = state.db
         .fetch_one("SELECT w.asset_id FROM watchlist w
@@ -125,7 +121,6 @@ pub async fn delete_watchlist(
     let mut args = PgArguments::default();
     args.add(&body.asset_id);
     args.add(&body.group_id);
-
 
     let record = state.db
         .execute("DELETE FROM watchlist WHERE asset_id = $1 and group_id = $2", args)

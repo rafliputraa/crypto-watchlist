@@ -1,10 +1,12 @@
-use actix_web::HttpResponse;
+use actix_web::{HttpMessage, HttpRequest, HttpResponse};
 use actix_web::web::{Data, Json, Path, Query};
+use log::debug;
 use sqlx::{Arguments, Row};
 use sqlx::postgres::PgArguments;
 use crate::database::Database;
 use crate::errors::ApiError;
 use crate::helpers::{format_datetime, respond_json, respond_ok};
+use crate::middleware_custom::Claims;
 use crate::server::AppState;
 
 #[derive(Debug, Serialize)]
@@ -16,27 +18,18 @@ pub struct WatchlistGroupResponse {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct WatchlistGroupUpdateRequest {
-    id: i32,
+pub struct WatchlistGroupCreateOrUpdateRequest {
     name: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct WatchlistGroupCreateRequest {
-    name: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct WatchlistGroupDeleteRequest {
-    id: i32,
 }
 
 pub async fn retrieve_all_watchlist_groups(
     state: Data<AppState>,
-    path: Path<i32>
+    request: HttpRequest,
 )
     -> Result<Json<Vec<WatchlistGroupResponse>>, ApiError> {
-    let user_id = path.into_inner();
+
+    let user_id = request.extensions().get::<Claims>().unwrap().user_id;
+
     let mut args = PgArguments::default();
     args.add(user_id);
 
@@ -58,10 +51,10 @@ pub async fn retrieve_all_watchlist_groups(
 
 pub async fn create_watchlist_group(
     state: Data<AppState>,
-    path: Path<i32>,
-    body: Json<WatchlistGroupCreateRequest>
+    body: Json<WatchlistGroupCreateOrUpdateRequest>,
+    request: HttpRequest
 ) -> Result<Json<WatchlistGroupResponse>, ApiError> {
-    let user_id = path.into_inner();
+    let user_id = request.extensions().get::<Claims>().unwrap().user_id;
     let mut args = PgArguments::default();
     args.add(user_id);
     args.add(&body.name);
@@ -82,21 +75,23 @@ pub async fn create_watchlist_group(
 
 pub async fn update_watchlist_group(
     state: Data<AppState>,
-    path: Path<i32>,
-    body: Json<WatchlistGroupUpdateRequest>
+    body: Json<WatchlistGroupCreateOrUpdateRequest>,
+    request: HttpRequest,
+    path: Path<i32>
 )
     -> Result<Json<WatchlistGroupResponse>, ApiError> {
-    let user_id = path.into_inner();
+    let user_id = request.extensions().get::<Claims>().unwrap().user_id;
+    let group_id = path.into_inner();
     let mut args = PgArguments::default();
     args.add(&body.name);
     args.add(user_id);
-    args.add(&body.id);
+    args.add(group_id);
 
     let record = state.db
         .fetch_one("UPDATE watchlist_groups SET name = COALESCE($1, name) WHERE user_id = $2 AND id = $3 RETURNING name, created_at", args)
         .await?;
     let watchlist_group = WatchlistGroupResponse {
-        id: body.id,
+        id: group_id,
         user_id,
         name: record.get("name"),
         created_at: format_datetime(record.get("created_at")),
@@ -107,13 +102,13 @@ pub async fn update_watchlist_group(
 
 pub async fn delete_watchlist_group(
     state: Data<AppState>,
-    path: Path<i32>,
-    query: Query<WatchlistGroupDeleteRequest>
+    request: HttpRequest,
+    path: Path<i32>
 ) -> Result<HttpResponse, ApiError> {
-    let user_id = path.into_inner();
-    let group_id = query.into_inner();
+    let user_id = request.extensions().get::<Claims>().unwrap().user_id;
+    let group_id = path.into_inner();
     let mut args = PgArguments::default();
-    args.add(group_id.id);
+    args.add(group_id);
     args.add(user_id);
 
     let record = state.db
