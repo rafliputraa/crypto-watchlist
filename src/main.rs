@@ -8,6 +8,7 @@ mod errors;
 mod helpers;
 mod watchlist;
 mod watchlistgroup;
+mod middleware_custom;
 
 #[macro_use]
 extern crate lazy_static;

@@ -12,6 +12,14 @@ pub enum ApiError {
     InternalServerError,
     #[display(fmt = "The data is not found")]
     NotFound,
+    #[display(fmt = "Invalid Token")]
+    InvalidToken,
+    #[display(fmt = "Token has expired")]
+    ExpiredSignature,
+    #[display(fmt = "Missing Token")]
+    MissingAuthorizationHeader,
+    #[display(fmt = "Malformed Token")]
+    MalformedAuthorizationToken,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -31,6 +39,10 @@ impl ResponseError for ApiError {
             ApiError::BadRequest(_) => StatusCode::BAD_REQUEST,
             ApiError::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::NotFound => StatusCode::NOT_FOUND,
+            ApiError::InvalidToken => StatusCode::UNAUTHORIZED,
+            ApiError::ExpiredSignature => StatusCode::UNAUTHORIZED,
+            ApiError::MissingAuthorizationHeader => StatusCode::UNAUTHORIZED,
+            ApiError::MalformedAuthorizationToken => StatusCode::UNAUTHORIZED,
         }
     }
     fn error_response(&self) -> HttpResponse {

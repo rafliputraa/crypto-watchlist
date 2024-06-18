@@ -9,6 +9,7 @@ use std::io::Write;
 use std::sync::Arc;
 use crate::data_provider::feed_assets_data;
 use crate::routes::routes;
+use crate::middleware_custom;
 
 pub struct AppState {
     pub db: Arc<dyn Database>,
@@ -57,6 +58,7 @@ pub async fn server() -> std::io::Result<()> {
     let server = HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
+            .wrap(middleware_custom::JWTMiddleware::new(CONFIG.jwt_secret.to_string()))
             .app_data(web::Data::new(AppState{
                 db: pool.clone(),
             }))

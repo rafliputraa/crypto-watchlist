@@ -10,6 +10,7 @@ pub struct Config {
     pub cmc_api_key: String,
     pub cmc_token_id_endpoint: String,
     pub is_feed_assets_data_enabled: bool,
+    pub jwt_secret: String,
 }
 
 lazy_static! {
