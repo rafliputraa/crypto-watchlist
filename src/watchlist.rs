@@ -2,6 +2,7 @@ use std::fmt;
 use std::sync::Arc;
 use actix_web::{HttpMessage, HttpRequest, HttpResponse};
 use actix_web::web::{Data, Json, Path};
+use crypto_protobuf::crypto;
 use derive_more::Display;
 use sqlx::{Arguments, Executor, Row};
 use sqlx::postgres::PgArguments;
@@ -85,6 +86,13 @@ pub async fn retrieve_all_watchlist(
     let mut args = PgArguments::default();
     let mut watchlist: Vec<WatchlistResponse> = vec![];
     args.add(watchlistgroup_id);
+
+    // TODO: Change the struct value according to the correct one and send it to redpanda
+    let in_params = crypto::watchlist::WatchlistCreateOrDeleteRequest{
+        group_id: 1,
+        asset_id: 2,
+        request_id: String::from("asd"),
+    };
 
     state.logging_chan_tx.send(format!("INPUT - retrieve_all_watchlist - watchlistgroup_id:  {}", watchlistgroup_id)).unwrap();
 

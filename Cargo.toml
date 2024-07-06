@@ -28,3 +28,5 @@ mockall = "0.12.1"
 async-trait = "0.1.80"
 actix-web-httpauth = "0.8.2"
 jsonwebtoken = "9.3.0"
+prost = "0.12.6"
+crypto-protobuf = { path = "protobuf" }
