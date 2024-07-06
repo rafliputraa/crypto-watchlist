@@ -1,6 +1,8 @@
+use std::fmt;
 use std::sync::Arc;
 use actix_web::{HttpMessage, HttpRequest, HttpResponse};
 use actix_web::web::{Data, Json, Path};
+use derive_more::Display;
 use sqlx::{Arguments, Executor, Row};
 use sqlx::postgres::PgArguments;
 use crate::database::Database;
@@ -15,6 +17,12 @@ pub struct WatchlistResponse {
     id: i32,
     name: String,
     symbol: String,
+}
+
+impl fmt::Display for WatchlistResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "id: {}, name: {}, symbol: {}", self.id, self.name, self.symbol)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -78,6 +86,8 @@ pub async fn retrieve_all_watchlist(
     let mut watchlist: Vec<WatchlistResponse> = vec![];
     args.add(watchlistgroup_id);
 
+    state.logging_chan_tx.send(format!("INPUT - retrieve_all_watchlist - watchlistgroup_id:  {}", watchlistgroup_id)).unwrap();
+
     let records = state.db
         .fetch_all("SELECT a.id, a.name, a.symbol FROM watchlist w JOIN assets a ON w.asset_id = a.id where w.group_id = $1", args)
         .await?;
@@ -93,6 +103,8 @@ pub async fn retrieve_all_watchlist(
         name: record.get("name"),
         symbol: record.get("symbol"),
     }).collect();
+
+    state.logging_chan_tx.send(format!("OUTPUT - retrieve_all_watchlist - watchlist:  {:?}", watchlist)).unwrap();
 
     respond_json(watchlist)
 }

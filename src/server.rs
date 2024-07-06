@@ -6,13 +6,16 @@ use sqlx::{Pool, Postgres};
 use crate::config::CONFIG;
 use crate::database::{create_pool, Database, PostgresDB};
 use std::io::Write;
-use std::sync::Arc;
+use std::sync::{Arc, mpsc};
+use std::sync::mpsc::Sender;
+use std::thread;
 use crate::data_provider::feed_assets_data;
 use crate::routes::routes;
 use crate::middleware_custom;
 
 pub struct AppState {
     pub db: Arc<dyn Database>,
+    pub logging_chan_tx: Sender<String>,
 }
 
 pub async fn server() -> std::io::Result<()> {
@@ -53,6 +56,14 @@ pub async fn server() -> std::io::Result<()> {
         }
     }
 
+    let (sender, receiver) = mpsc::channel::<String>();
+
+    thread::spawn(move || {
+        for received in receiver {
+            debug!("Received log: {}", received);
+        }
+    });
+
     info!("🚀 Server started successfully");
     // Start the server
     let server = HttpServer::new(move || {
@@ -61,6 +72,7 @@ pub async fn server() -> std::io::Result<()> {
             .wrap(middleware_custom::JWTMiddleware::new(CONFIG.jwt_secret.to_string()))
             .app_data(web::Data::new(AppState{
                 db: pool.clone(),
+                logging_chan_tx: sender.clone(),
             }))
             .configure(routes)
     });
