@@ -4,8 +4,10 @@ use actix_web::{HttpMessage, HttpRequest, HttpResponse};
 use actix_web::web::{Data, Json, Path};
 use crypto_protobuf::crypto;
 use derive_more::Display;
+use prost::Message;
 use sqlx::{Arguments, Executor, Row};
 use sqlx::postgres::PgArguments;
+use uuid::Uuid;
 use crate::database::Database;
 use crate::errors::ApiError;
 use crate::errors::ApiError::{BadRequest, InternalServerError};
@@ -86,15 +88,9 @@ pub async fn retrieve_all_watchlist(
     let mut args = PgArguments::default();
     let mut watchlist: Vec<WatchlistResponse> = vec![];
     args.add(watchlistgroup_id);
+    let request_id = Uuid::now_v7().to_string();
 
-    // TODO: Change the struct value according to the correct one and send it to redpanda
-    let in_params = crypto::watchlist::WatchlistCreateOrDeleteRequest{
-        group_id: 1,
-        asset_id: 2,
-        request_id: String::from("asd"),
-    };
-
-    state.logging_chan_tx.send(format!("INPUT - retrieve_all_watchlist - watchlistgroup_id:  {}", watchlistgroup_id)).unwrap();
+    state.logging_chan_tx.send(format!("INPUT - retrieve_all_watchlist. request_id: {} | watchlistgroup_id:  {}", &request_id, watchlistgroup_id)).unwrap();
 
     let records = state.db
         .fetch_all("SELECT a.id, a.name, a.symbol FROM watchlist w JOIN assets a ON w.asset_id = a.id where w.group_id = $1", args)
@@ -112,7 +108,7 @@ pub async fn retrieve_all_watchlist(
         symbol: record.get("symbol"),
     }).collect();
 
-    state.logging_chan_tx.send(format!("OUTPUT - retrieve_all_watchlist - watchlist:  {:?}", watchlist)).unwrap();
+    state.logging_chan_tx.send(format!("OUTPUT - retrieve_all_watchlist. request_id: {} | response: {:?}", &request_id, watchlist)).unwrap();
 
     respond_json(watchlist)
 }

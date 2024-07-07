@@ -58,9 +58,10 @@ pub async fn server() -> std::io::Result<()> {
 
     let (sender, receiver) = mpsc::channel::<String>();
 
+    // TODO: sned the log to redpanda
     thread::spawn(move || {
         for received in receiver {
-            debug!("Received log: {}", received);
+            debug!("Received log: {:?}", received);
         }
     });
 

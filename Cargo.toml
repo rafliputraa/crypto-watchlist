@@ -21,12 +21,11 @@ serde = "1.0.202"
 serde_derive = "1.0.202"
 serde_json = "1.0.117"
 sqlx = {version = "0.7.4", features = ["runtime-async-std-native-tls", "postgres", "chrono", "macros"] }
-uuid = { version = "1.8.0", features = ["serde", "v4"] }
+uuid = { version = "1.9.1", features = ["serde", "v7"] }
 futures-util = "0.3"
 derive_more = "0.99.17"
 mockall = "0.12.1"
 async-trait = "0.1.80"
 actix-web-httpauth = "0.8.2"
 jsonwebtoken = "9.3.0"
-prost = "0.12.6"
-crypto-protobuf = { path = "protobuf" }
+kafka = "0.10.0"
