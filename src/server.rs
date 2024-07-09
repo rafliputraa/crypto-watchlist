@@ -7,8 +7,11 @@ use crate::config::CONFIG;
 use crate::database::{create_pool, Database, PostgresDB};
 use std::io::Write;
 use std::sync::{Arc, mpsc};
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
+use std::time::Duration;
+use kafka::client::RequiredAcks;
+use kafka::producer::{Compression, Producer, Record};
 use crate::data_provider::feed_assets_data;
 use crate::routes::routes;
 use crate::middleware_custom;
@@ -58,12 +61,7 @@ pub async fn server() -> std::io::Result<()> {
 
     let (sender, receiver) = mpsc::channel::<String>();
 
-    // TODO: sned the log to redpanda
-    thread::spawn(move || {
-        for received in receiver {
-            debug!("Received log: {:?}", received);
-        }
-    });
+    start_logging_producer(receiver).await;
 
     info!("🚀 Server started successfully");
     // Start the server
@@ -78,4 +76,31 @@ pub async fn server() -> std::io::Result<()> {
             .configure(routes)
     });
     server.bind(&CONFIG.server)?.run().await
+}
+
+async fn start_logging_producer(receiver: Receiver<String>) {
+    thread::spawn(move || {
+        let mut producer_raw = Producer::from_hosts(CONFIG.redpanda_brokers.to_owned())
+            .with_ack_timeout( Duration::from_millis(100))
+            .with_compression(Compression::SNAPPY)
+            .with_required_acks(RequiredAcks::One)
+            .create();
+        match producer_raw {
+            Ok(mut producer) => {
+                for received in receiver {
+                    debug!("Received log: {:?}", received);
+                    producer.send(&Record::from_value(&CONFIG.log_producer_topic, received)).unwrap();
+                }
+            }
+            Err(kafka::Error::NoHostReachable) => {
+                error!("No host is reachable");
+                std::process::exit(1);
+            }
+            Err(e) => {
+                error!("Unmapped error {}", e);
+                std::process::exit(1);
+            }
+        }
+    });
+
 }
