@@ -9,7 +9,7 @@ edition = "2021"
 actix = "0.13.3"
 actix-rt = "2.9.0"
 actix-web = "4.7.0"
-reqwest = {version = "0.11.0", features = ["native-tls", "stream", "json"] }
+reqwest = {version = "0.11.0", features = ["stream", "json"] }
 chrono = "0.4.38"
 dotenv = "0.15.0"
 env_logger = "0.11.3"
@@ -20,7 +20,7 @@ redis = { version = "0.25.3", features = ["tokio-comp"] }
 serde = "1.0.202"
 serde_derive = "1.0.202"
 serde_json = "1.0.117"
-sqlx = {version = "0.7.4", features = ["runtime-async-std-native-tls", "postgres", "chrono", "macros"] }
+sqlx = {version = "0.7.4", features = ["runtime-async-std", "postgres", "chrono", "macros"] }
 uuid = { version = "1.9.1", features = ["serde", "v7"] }
 futures-util = "0.3"
 derive_more = "0.99.17"
@@ -29,3 +29,4 @@ async-trait = "0.1.80"
 actix-web-httpauth = "0.8.2"
 jsonwebtoken = "9.3.0"
 kafka = "0.10.0"
+openssl-sys = "0.9.103"

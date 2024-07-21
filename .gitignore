@@ -3,4 +3,4 @@
 .cargo
 .idea
 apps
-docker-compose.yml
+docker/docker-compose.yml

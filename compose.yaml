@@ -1,0 +1,101 @@
+networks:
+  crypto-watchlist_default:
+    driver: bridge
+volumes:
+  redpanda_broker: null
+
+services:
+  server:
+    build:
+      context: .
+      target: final
+    ports:
+      - 8888:8888
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - postgres
+      - redpanda_broker
+    networks:
+      crypto-watchlist_default:
+  redis:
+    image: redis:7.2.4-alpine
+    restart: always
+    ports:
+      - "6381:6379"
+    command: redis-server --save 20 1 --loglevel warning --requirepass marketdata
+    volumes:
+      - ./apps/crypto-watchlist-redis:/var/lib/redis/data
+    networks:
+      crypto-watchlist_default:
+  postgres:
+    image: postgres:latest
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./apps/crypto-watchlist-postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=marketdata
+      - POSTGRES_USER=marketdata_admin
+      - POSTGRES_DB=marketdata_db
+    networks:
+      crypto-watchlist_default:
+  redpanda_broker:
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      # Address the broker advertises to clients that connect to the Kafka API.
+      # Use the internal addresses to connect to the Redpanda brokers'
+      # from inside the same Docker network.
+      # Use the external addresses to connect to the Redpanda brokers'
+      # from outside the Docker network.
+      - --advertise-kafka-addr internal://redpanda_broker:9092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      # Address the broker advertises to clients that connect to the HTTP Proxy.
+      - --advertise-pandaproxy-addr internal://redpanda_broker:8082,external://localhost:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      # Redpanda brokers use the RPC API to communicate with each other internally.
+      - --rpc-addr redpanda_broker:33145
+      - --advertise-rpc-addr redpanda_broker:33145
+      # Mode dev-container uses well-known configuration properties for development in containers.
+      - --mode dev-container
+      # Tells Seastar (the framework Redpanda uses under the hood) to use 1 core on the system.
+      - --smp 1
+      - --default-log-level=info
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: redpanda_broker
+    volumes:
+      - redpanda_broker:/var/lib/redpanda/data
+    ports:
+      - 18081:18081
+      - 18082:18082
+      - 19092:19092
+      - 19644:9644
+    networks:
+      crypto-watchlist_default:
+  console_0:
+    container_name: redpanda-console_0
+    image: docker.redpanda.com/redpandadata/console:latest
+    networks:
+      crypto-watchlist_default:
+    entrypoint: /bin/sh
+    command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console'
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda_broker:9092"]
+          schemaRegistry:
+            enabled: true
+            urls: ["http://redpanda_broker:8081"]
+        redpanda:
+          adminApi:
+            enabled: true
+            urls: ["http://redpanda_broker:9644"]
+    ports:
+      - 8181:8080
+    depends_on:
+      - redpanda_broker
+
