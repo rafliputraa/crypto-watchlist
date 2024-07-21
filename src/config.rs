@@ -11,8 +11,7 @@ pub struct Config {
     pub cmc_token_id_endpoint: String,
     pub is_feed_assets_data_enabled: bool,
     pub jwt_secret: String,
-    pub redpanda_brokers: Vec<String>,
-    pub log_producer_topic: String,
+    pub log_file_location: String,
 }
 
 lazy_static! {

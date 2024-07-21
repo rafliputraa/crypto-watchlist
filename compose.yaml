@@ -1,8 +1,14 @@
 networks:
   crypto-watchlist_default:
     driver: bridge
+
 volumes:
-  redpanda_broker: null
+  certs:
+    driver: local
+  esdata01:
+    driver: local
+  kibanadata:
+    driver: local
 
 services:
   server:
@@ -11,14 +17,16 @@ services:
       target: final
     ports:
       - 8888:8888
+    volumes:
+      - ./apps/crypto-watchlist-server/logs:/logs
     env_file:
       - .env
     depends_on:
       - redis
       - postgres
-      - redpanda_broker
     networks:
       crypto-watchlist_default:
+
   redis:
     image: redis:7.2.4-alpine
     restart: always
@@ -29,6 +37,7 @@ services:
       - ./apps/crypto-watchlist-redis:/var/lib/redis/data
     networks:
       crypto-watchlist_default:
+
   postgres:
     image: postgres:latest
     ports:
@@ -41,61 +50,148 @@ services:
       - POSTGRES_DB=marketdata_db
     networks:
       crypto-watchlist_default:
-  redpanda_broker:
-    command:
-      - redpanda
-      - start
-      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
-      # Address the broker advertises to clients that connect to the Kafka API.
-      # Use the internal addresses to connect to the Redpanda brokers'
-      # from inside the same Docker network.
-      # Use the external addresses to connect to the Redpanda brokers'
-      # from outside the Docker network.
-      - --advertise-kafka-addr internal://redpanda_broker:9092,external://localhost:19092
-      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
-      # Address the broker advertises to clients that connect to the HTTP Proxy.
-      - --advertise-pandaproxy-addr internal://redpanda_broker:8082,external://localhost:18082
-      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
-      # Redpanda brokers use the RPC API to communicate with each other internally.
-      - --rpc-addr redpanda_broker:33145
-      - --advertise-rpc-addr redpanda_broker:33145
-      # Mode dev-container uses well-known configuration properties for development in containers.
-      - --mode dev-container
-      # Tells Seastar (the framework Redpanda uses under the hood) to use 1 core on the system.
-      - --smp 1
-      - --default-log-level=info
-    image: docker.redpanda.com/redpandadata/redpanda:latest
-    container_name: redpanda_broker
-    volumes:
-      - redpanda_broker:/var/lib/redpanda/data
-    ports:
-      - 18081:18081
-      - 18082:18082
-      - 19092:19092
-      - 19644:9644
-    networks:
-      crypto-watchlist_default:
-  console_0:
-    container_name: redpanda-console_0
-    image: docker.redpanda.com/redpandadata/console:latest
-    networks:
-      crypto-watchlist_default:
-    entrypoint: /bin/sh
-    command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console'
-    environment:
-      CONFIG_FILEPATH: /tmp/config.yml
-      CONSOLE_CONFIG_FILE: |
-        kafka:
-          brokers: ["redpanda_broker:9092"]
-          schemaRegistry:
-            enabled: true
-            urls: ["http://redpanda_broker:8081"]
-        redpanda:
-          adminApi:
-            enabled: true
-            urls: ["http://redpanda_broker:9644"]
-    ports:
-      - 8181:8080
-    depends_on:
-      - redpanda_broker
 
+  vector:
+    image: timberio/vector:latest-alpine
+    volumes:
+      - ./vector.yaml:/etc/vector/vector.yaml:ro
+      - ./apps/crypto-watchlist-server/logs:/logs
+      - ./apps/crypto-watchlist-vector:/var/local/lib/vector
+    depends_on:
+      - server
+      - es01
+    networks:
+      crypto-watchlist_default:
+
+  setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+    user: "0"
+    command: >
+      bash -c '
+        if [ x${ELASTIC_PASSWORD} == x ]; then
+          echo "Set the ELASTIC_PASSWORD environment variable in the .env file";
+          exit 1;
+        elif [ x${KIBANA_PASSWORD} == x ]; then
+          echo "Set the KIBANA_PASSWORD environment variable in the .env file";
+          exit 1;
+        fi;
+        if [ ! -f config/certs/ca.zip ]; then
+          echo "Creating CA";
+          bin/elasticsearch-certutil ca --silent --pem -out config/certs/ca.zip;
+          unzip config/certs/ca.zip -d config/certs;
+        fi;
+        if [ ! -f config/certs/certs.zip ]; then
+          echo "Creating certs";
+          echo -ne \
+          "instances:\n"\
+          "  - name: es01\n"\
+          "    dns:\n"\
+          "      - es01\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: kibana\n"\
+          "    dns:\n"\
+          "      - kibana\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          > config/certs/instances.yml;
+          bin/elasticsearch-certutil cert --silent --pem -out config/certs/certs.zip --in config/certs/instances.yml --ca-cert config/certs/ca/ca.crt --ca-key config/certs/ca/ca.key;
+          unzip config/certs/certs.zip -d config/certs;
+        fi;
+        echo "Setting file permissions"
+        chown -R root:root config/certs;
+        find . -type d -exec chmod 750 \{\} \;;
+        find . -type f -exec chmod 640 \{\} \;;
+        echo "Waiting for Elasticsearch availability";
+        until curl -s --cacert config/certs/ca/ca.crt https://es01:9200 | grep -q "missing authentication credentials"; do sleep 30; done;
+        echo "Setting kibana_system password";
+        until curl -s -X POST --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://es01:9200/_security/user/kibana_system/_password -d "{\"password\":\"${KIBANA_PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
+        echo "All done!";
+      '
+    healthcheck:
+      test: [ "CMD-SHELL", "[ -f config/certs/es01/es01.crt ]" ]
+      interval: 1s
+      timeout: 5s
+      retries: 120
+  es01:
+    depends_on:
+      setup:
+        condition: service_healthy
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    labels:
+      co.elastic.logs/module: elasticsearch
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+      - esdata01:/usr/share/elasticsearch/data
+    ports:
+      - ${ES_PORT}:9200
+    environment:
+      - node.name=es01
+      - cluster.name=${CLUSTER_NAME}
+      - discovery.type=single-node
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/es01/es01.key
+      - xpack.security.http.ssl.certificate=certs/es01/es01.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/es01/es01.key
+      - xpack.security.transport.ssl.certificate=certs/es01/es01.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.license.self_generated.type=${LICENSE}
+    mem_limit: ${ES_MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+    networks:
+      crypto-watchlist_default:
+  kibana:
+    depends_on:
+      es01:
+        condition: service_healthy
+    image: docker.elastic.co/kibana/kibana:${STACK_VERSION}
+    labels:
+      co.elastic.logs/module: kibana
+    volumes:
+      - certs:/usr/share/kibana/config/certs
+      - kibanadata:/usr/share/kibana/data
+    ports:
+      - ${KIBANA_PORT}:5601
+    environment:
+      - SERVERNAME=kibana
+      - ELASTICSEARCH_HOSTS=https://es01:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
+      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+      - XPACK_SECURITY_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+      - XPACK_REPORTING_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+    mem_limit: ${KB_MEM_LIMIT}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s -I http://localhost:5601 | grep -q 'HTTP/1.1 302 Found'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+    networks:
+      crypto-watchlist_default:

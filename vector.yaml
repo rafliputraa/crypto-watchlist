@@ -1,0 +1,29 @@
+# Sources
+sources:
+  crypto_watchlist_logs:
+    type: file
+    include:
+      - /logs/crypto-watchlist.*
+    read_from: beginning
+    ignore_older_secs: 600
+    glob_minimum_cooldown_ms: 1000
+    host_key: host
+    data_dir: /var/local/lib/vector
+    offset_key: offset
+
+# Sinks
+sinks:
+  elasticsearch:
+    api_version: v8
+    type: elasticsearch
+    inputs:
+      - crypto_watchlist_logs
+    endpoints:
+      - https://es01:9200
+    bulk:
+      action: "create"
+      index: "crypto_watchlist_logs"
+    healthcheck:
+      enabled: true
+    query:
+      X-Powered-By: Vector

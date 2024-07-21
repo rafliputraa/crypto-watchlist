@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::sync::Arc;
 use async_trait::async_trait;
 use sqlx::{Error, PgPool, Postgres, Row, Transaction};
@@ -5,7 +6,7 @@ use sqlx::postgres::{PgArguments, PgPoolOptions, PgQueryResult, PgRow};
 use crate::config::CONFIG;
 
 #[async_trait]
-pub trait Database: Send + Sync {
+pub trait Database: Send + Sync + Debug {
     async fn execute(&self, query: &str, args: PgArguments) -> Result<PgQueryResult, Error>;
     async fn fetch_all(&self, query: &str, args: PgArguments) -> Result<Vec<PgRow>, Error>;
     async fn fetch_one(&self, query: &str, args: PgArguments) -> Result<PgRow, Error>;
@@ -31,6 +32,7 @@ impl Database for PostgresDB {
     }
 }
 
+#[derive(Debug)]
 pub struct PostgresDB {
     pub pool: PgPool,
 }

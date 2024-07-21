@@ -4,7 +4,7 @@ use actix_web::{HttpMessage, HttpRequest, HttpResponse};
 use actix_web::web::{Data, Json, Path};
 use sqlx::{Arguments, Executor, Row};
 use sqlx::postgres::PgArguments;
-use uuid::Uuid;
+use tracing_actix_web::root_span_macro::private::tracing::instrument;
 use crate::database::Database;
 use crate::errors::ApiError;
 use crate::errors::ApiError::{BadRequest, InternalServerError};
@@ -77,6 +77,7 @@ pub async fn create_watchlist(
     respond_ok()
 }
 
+#[instrument]
 pub async fn retrieve_all_watchlist(
     state: Data<AppState>,
     path: Path<i32>
@@ -85,9 +86,6 @@ pub async fn retrieve_all_watchlist(
     let mut args = PgArguments::default();
     let mut watchlist: Vec<WatchlistResponse> = vec![];
     args.add(watchlistgroup_id);
-    let request_id = Uuid::now_v7().to_string();
-
-    state.logging_chan_tx.send(format!("INPUT - retrieve_all_watchlist. request_id: {} | watchlistgroup_id:  {}", &request_id, watchlistgroup_id)).unwrap();
 
     let records = state.db
         .fetch_all("SELECT a.id, a.name, a.symbol FROM watchlist w JOIN assets a ON w.asset_id = a.id where w.group_id = $1", args)
@@ -104,8 +102,6 @@ pub async fn retrieve_all_watchlist(
         name: record.get("name"),
         symbol: record.get("symbol"),
     }).collect();
-
-    state.logging_chan_tx.send(format!("OUTPUT - retrieve_all_watchlist. request_id: {} | response: {:?}", &request_id, watchlist)).unwrap();
 
     respond_json(watchlist)
 }
