@@ -20,6 +20,14 @@ sinks:
       - crypto_watchlist_logs
     endpoints:
       - https://es01:9200
+    auth:
+      strategy: basic
+      user: elastic
+      password: sariawan
+    tls:
+      ca_file: "/usr/share/kibana/config/certs/ca.crt"
+      verify_certificate: true
+      verify_hostname: true
     bulk:
       action: "create"
       index: "crypto_watchlist_logs"

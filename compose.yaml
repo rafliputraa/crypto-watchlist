@@ -57,6 +57,7 @@ services:
       - ./vector.yaml:/etc/vector/vector.yaml:ro
       - ./apps/crypto-watchlist-server/logs:/logs
       - ./apps/crypto-watchlist-vector:/var/local/lib/vector
+      - certs:/usr/share/kibana/config/certs
     depends_on:
       - server
       - es01
