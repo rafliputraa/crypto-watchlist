@@ -10,28 +10,67 @@ sources:
     host_key: host
     data_dir: /var/local/lib/vector
     offset_key: offset
+    fingerprint:
+      strategy: "checksum"
+
+# Transforms
+transforms:
+  to_json:
+    type: remap
+    inputs:
+      - crypto_watchlist_logs
+    drop_on_abort: true
+    metric_tag_values: single
+    source: |-
+      . = parse_json!(.message)
+    timezone: local
+  to_str_level:
+    type: remap
+    inputs:
+      - to_json
+    drop_on_abort: true
+    metric_tag_values: single
+    source: |-
+      .level = 
+      if .level == 10 {
+        .level = "TRACE"
+      } else if .level == 20 {
+        .level = "DEBUG"
+      } else if .level == 30 {
+        .level = "INFO"
+      } else if .level == 40 {
+        .level = "WARN"
+      } else if .level == 50 {
+        .level = "ERROR"
+      } else if .level == 60 {
+        .level = "FATAL"
+      } else {
+        .level = "UNKNOWN"
+      }
+
+    timezone: local
 
 # Sinks
 sinks:
   elasticsearch:
     api_version: v8
     type: elasticsearch
+    id_key: "id"
     inputs:
-      - crypto_watchlist_logs
+      - to_str_level
     endpoints:
-      - https://es01:9200
+      - https://es01:${ES_PORT}
     auth:
       strategy: basic
-      user: elastic
-      password: sariawan
+      user: "${ELASTIC_USERNAME}"
+      password: "${ELASTIC_PASSWORD}"
     tls:
-      ca_file: "/usr/share/kibana/config/certs/ca.crt"
+      ca_file: "/usr/share/elasticsearch/config/certs/ca/ca.crt"
       verify_certificate: true
       verify_hostname: true
+    mode: "bulk"
     bulk:
       action: "create"
-      index: "crypto_watchlist_logs"
+      index: "crypto_watchlist_log"
     healthcheck:
       enabled: true
-    query:
-      X-Powered-By: Vector

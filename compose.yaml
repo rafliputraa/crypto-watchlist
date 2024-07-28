@@ -52,15 +52,20 @@ services:
       crypto-watchlist_default:
 
   vector:
-    image: timberio/vector:latest-alpine
+    image: timberio/vector:0.39.0-alpine
+    env_file:
+      - .env
+    environment:
+      - LOG=debug
     volumes:
       - ./vector.yaml:/etc/vector/vector.yaml:ro
       - ./apps/crypto-watchlist-server/logs:/logs
       - ./apps/crypto-watchlist-vector:/var/local/lib/vector
-      - certs:/usr/share/kibana/config/certs
+      - certs:/usr/share/elasticsearch/config/certs
     depends_on:
       - server
       - es01
+    restart: always
     networks:
       crypto-watchlist_default:
 
@@ -185,6 +190,7 @@ services:
       - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${ENCRYPTION_KEY}
       - XPACK_REPORTING_ENCRYPTIONKEY=${ENCRYPTION_KEY}
     mem_limit: ${KB_MEM_LIMIT}
+    restart: always
     healthcheck:
       test:
         [
