@@ -2,6 +2,8 @@ use std::fmt;
 use std::sync::Arc;
 use actix_web::{HttpMessage, HttpRequest, HttpResponse};
 use actix_web::web::{Data, Json, Path};
+use redis_async::error::Error;
+use redis_async::resp::{FromResp, RespValue};
 use sqlx::{Arguments, Executor, Row};
 use sqlx::postgres::PgArguments;
 use tracing_actix_web::root_span_macro::private::tracing::instrument;
@@ -12,7 +14,7 @@ use crate::helpers::{respond_json, respond_ok};
 use crate::middleware_custom::Claims;
 use crate::server::AppState;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WatchlistResponse {
     id: i32,
     name: String,
@@ -25,12 +27,28 @@ impl fmt::Display for WatchlistResponse {
     }
 }
 
+impl FromResp for WatchlistResponse {
+    fn from_resp(resp: RespValue) -> Result<Self, Error> {
+        match resp {
+            RespValue::BulkString(bytes) => {
+                serde_json::from_slice(&bytes).map_err(|e| Error::Internal(e.to_string()))
+            },
+            _ => Err(Error::Internal("Unexpected response type".to_string())),
+        }
+    }
+
+    fn from_resp_int(resp: RespValue) -> Result<Self, Error> {
+        todo!()
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct WatchlistCreateOrDeleteRequest {
     group_id: i32,
     asset_id: i32,
 }
 
+#[instrument]
 async fn check_exists(db: &Arc<dyn Database>, table_name: &str, id: i32) -> Result<bool, ApiError> {
     let query = format!("SELECT EXISTS(SELECT 1 FROM {} WHERE id = $1)", table_name);
     let mut args = PgArguments::default();
@@ -45,6 +63,7 @@ async fn check_exists(db: &Arc<dyn Database>, table_name: &str, id: i32) -> Resu
     Ok(true)
 }
 
+#[instrument]
 pub async fn create_watchlist(
     state: Data<AppState>,
     body: Json<WatchlistCreateOrDeleteRequest>
@@ -87,25 +106,37 @@ pub async fn retrieve_all_watchlist(
     let mut watchlist: Vec<WatchlistResponse> = vec![];
     args.add(watchlistgroup_id);
 
-    let records = state.db
-        .fetch_all("SELECT a.id, a.name, a.symbol FROM watchlist w JOIN assets a ON w.asset_id = a.id where w.group_id = $1", args)
-        .await?;
+    let cached_data: Result<Vec<WatchlistResponse>, ApiError> = state.redis_client.get(format!("all_watchlist::{}", watchlistgroup_id)).await;
 
-    if records.is_empty() {
-        return respond_json(watchlist);
+    match cached_data {
+        Ok(cached_data) => {
+            Ok(respond_json(cached_data).unwrap())
+        }
+        Err(ApiError::RedisNil) => {
+            let records = state.db
+                .fetch_all("SELECT a.id, a.name, a.symbol FROM watchlist w JOIN assets a ON w.asset_id = a.id where w.group_id = $1", args)
+                .await?;
+
+            if records.is_empty() {
+                return respond_json(watchlist);
+            }
+
+            watchlist = records
+                .iter()
+                .map(|record| WatchlistResponse {
+                    id: record.get("id"),
+                    name: record.get("name"),
+                    symbol: record.get("symbol"),
+                }).collect();
+
+            state.redis_client.set(format!("all_watchlist::{}", watchlistgroup_id), watchlist.clone()).await.expect("Failed to set the data to Redis");
+            respond_json(watchlist)
+        }
+        _ => Err(InternalServerError)
     }
-
-    watchlist = records
-        .iter()
-        .map(|record| WatchlistResponse {
-        id: record.get("id"),
-        name: record.get("name"),
-        symbol: record.get("symbol"),
-    }).collect();
-
-    respond_json(watchlist)
 }
 
+#[instrument]
 pub async fn delete_watchlist(
     state: Data<AppState>,
     body: Json<WatchlistCreateOrDeleteRequest>,

@@ -9,6 +9,7 @@ mod helpers;
 mod watchlist;
 mod watchlistgroup;
 mod middleware_custom;
+mod cache;
 
 #[macro_use]
 extern crate lazy_static;

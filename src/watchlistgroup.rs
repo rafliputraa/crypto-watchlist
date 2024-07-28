@@ -3,6 +3,7 @@ use actix_web::web::{Data, Json, Path, Query};
 use log::debug;
 use sqlx::{Arguments, Row};
 use sqlx::postgres::PgArguments;
+use tracing::instrument;
 use crate::database::Database;
 use crate::errors::ApiError;
 use crate::helpers::{format_datetime, respond_json, respond_ok};
@@ -22,6 +23,7 @@ pub struct WatchlistGroupCreateOrUpdateRequest {
     name: String,
 }
 
+#[instrument]
 pub async fn retrieve_all_watchlist_groups(
     state: Data<AppState>,
     request: HttpRequest,
@@ -49,6 +51,7 @@ pub async fn retrieve_all_watchlist_groups(
     respond_json(watchlist_groups)
 }
 
+#[instrument]
 pub async fn create_watchlist_group(
     state: Data<AppState>,
     body: Json<WatchlistGroupCreateOrUpdateRequest>,
@@ -73,6 +76,7 @@ pub async fn create_watchlist_group(
     respond_json(watchlist_group)
 }
 
+#[instrument]
 pub async fn update_watchlist_group(
     state: Data<AppState>,
     body: Json<WatchlistGroupCreateOrUpdateRequest>,
@@ -100,6 +104,7 @@ pub async fn update_watchlist_group(
     respond_json(watchlist_group)
 }
 
+#[instrument]
 pub async fn delete_watchlist_group(
     state: Data<AppState>,
     request: HttpRequest,

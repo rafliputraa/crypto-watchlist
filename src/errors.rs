@@ -1,7 +1,9 @@
+use std::fmt;
+use std::fmt::Display;
 use actix_web::{HttpResponse, ResponseError};
 use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
-use derive_more::{Display, Error};
+use derive_more::Display;
 use sqlx::Error;
 
 #[derive(Debug, Display)]
@@ -20,6 +22,12 @@ pub enum ApiError {
     MissingAuthorizationHeader,
     #[display(fmt = "Malformed Token")]
     MalformedAuthorizationToken,
+    #[display(fmt = "Internal server error, Redis: {}", _0)]
+    RedisError(String),
+    #[display(fmt = "Internal server error, Serde: {}", _0)]
+    SerdeError(String),
+    #[display(fmt = "Data not found in Redis")]
+    RedisNil,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -43,6 +51,9 @@ impl ResponseError for ApiError {
             ApiError::ExpiredSignature => StatusCode::UNAUTHORIZED,
             ApiError::MissingAuthorizationHeader => StatusCode::UNAUTHORIZED,
             ApiError::MalformedAuthorizationToken => StatusCode::UNAUTHORIZED,
+            ApiError::RedisError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::SerdeError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::RedisNil => StatusCode::NOT_FOUND,
         }
     }
     fn error_response(&self) -> HttpResponse {
@@ -56,11 +67,23 @@ impl ResponseError for ApiError {
     }
 }
 
-impl From<sqlx::Error> for ApiError {
+impl From<Error> for ApiError {
     fn from(error: Error) -> ApiError {
         match error {
             Error::RowNotFound => ApiError::NotFound,
             _ => ApiError::InternalServerError,
         }
+    }
+}
+
+impl From<redis_async::error::Error> for ApiError {
+    fn from(err: redis_async::error::Error) -> ApiError {
+        ApiError::RedisError(err.to_string())
+    }
+}
+
+impl From<serde_json::Error> for ApiError {
+    fn from(err: serde_json::Error) -> ApiError {
+        ApiError::SerdeError(err.to_string())
     }
 }
