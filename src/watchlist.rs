@@ -1,8 +1,10 @@
+use std::fmt;
 use std::sync::Arc;
 use actix_web::{HttpMessage, HttpRequest, HttpResponse};
 use actix_web::web::{Data, Json, Path};
 use sqlx::{Arguments, Executor, Row};
 use sqlx::postgres::PgArguments;
+use tracing_actix_web::root_span_macro::private::tracing::instrument;
 use crate::database::Database;
 use crate::errors::ApiError;
 use crate::errors::ApiError::{BadRequest, InternalServerError};
@@ -15,6 +17,12 @@ pub struct WatchlistResponse {
     id: i32,
     name: String,
     symbol: String,
+}
+
+impl fmt::Display for WatchlistResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "id: {}, name: {}, symbol: {}", self.id, self.name, self.symbol)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -69,6 +77,7 @@ pub async fn create_watchlist(
     respond_ok()
 }
 
+#[instrument]
 pub async fn retrieve_all_watchlist(
     state: Data<AppState>,
     path: Path<i32>
