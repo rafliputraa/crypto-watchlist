@@ -71,13 +71,13 @@ pub async fn create_watchlist(
     // Check if the group_id exists
     let group_exists = check_exists(&state.db, "watchlist_groups", body.group_id).await?;
     if !group_exists {
-        return Err(ApiError::BadRequest("Watchlist Group not found".into()));
+        return Err(BadRequest("Watchlist Group not found".into()));
     }
 
     // Check if the asset_id exists
     let asset_exists = check_exists(&state.db, "assets", body.asset_id).await?;
     if !asset_exists {
-        return Err(ApiError::BadRequest("Asset not found".into()));
+        return Err(BadRequest("Asset not found".into()));
     }
 
     let mut args = PgArguments::default();
@@ -90,8 +90,10 @@ pub async fn create_watchlist(
 
     // TODO: Add unprocessible entity instead of internal server error.
     if record.rows_affected() == 0 {
-        return Err(ApiError::InternalServerError);
+        return Err(InternalServerError);
     }
+
+    state.redis_client.del(format!("all_watchlist::{}", body.group_id)).await.expect("Failed to delete a key on Redis");
 
     respond_ok()
 }
@@ -169,6 +171,8 @@ pub async fn delete_watchlist(
     if record.rows_affected() == 0 {
         return Err(InternalServerError);
     }
+
+    state.redis_client.del(format!("all_watchlist::{}", body.group_id)).await.expect("Failed to delete a key on Redis");
 
     respond_ok()
 }

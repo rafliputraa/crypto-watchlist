@@ -38,6 +38,18 @@ pub async fn create_redis_client() -> Result<Arc<Redis>, ApiError> {
 }
 
 impl Redis {
+
+    #[instrument]
+    pub async fn del(&self, key: String) -> Result<(), ApiError> {
+        let command = vec![
+            RespValue::BulkString(b"DEL".to_vec()),
+            RespValue::BulkString(key.as_bytes().to_vec()),
+        ];
+
+        self.redis_client.send_and_forget(RespValue::Array(command));
+        Ok(())
+    }
+
     #[instrument]
     pub async fn set<T: Serialize + Debug>(&self, key: String, value: T) -> Result<(), ApiError> {
         let serialized_value = serde_json::to_string(&value)?;
