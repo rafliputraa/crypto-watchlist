@@ -688,20 +688,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b6a852b24ab71dffc585bcb46eaf7959d175cb865a7152e35b348d1b2960422"
 
 [[package]]
-name = "combine"
-version = "4.6.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
-dependencies = [
- "bytes",
- "futures-core",
- "memchr",
- "pin-project-lite",
- "tokio",
- "tokio-util",
-]
-
-[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -818,7 +804,7 @@ dependencies = [
 
 [[package]]
 name = "crypto-watchlist"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "actix",
  "actix-rt",
@@ -837,7 +823,7 @@ dependencies = [
  "log",
  "mockall",
  "openssl-sys",
- "redis",
+ "redis-async",
  "reqwest",
  "serde",
  "serde_derive",
@@ -2172,24 +2158,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "redis"
-version = "0.25.3"
+name = "redis-async"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6472825949c09872e8f2c50bde59fcefc17748b6be5c90fd67cd8b4daca73bfd"
+checksum = "e44d2172ccb44736798c4cdc8690fb0a3776a74daa502bfe124708ffc144909c"
 dependencies = [
- "async-trait",
  "bytes",
- "combine",
+ "futures-channel",
+ "futures-sink",
  "futures-util",
- "itoa",
- "percent-encoding",
- "pin-project-lite",
- "ryu",
- "sha1_smol",
+ "log",
+ "pin-project",
  "socket2 0.5.7",
  "tokio",
  "tokio-util",
- "url",
 ]
 
 [[package]]
@@ -2497,12 +2479,6 @@ dependencies = [
  "cpufeatures",
  "digest",
 ]
-
-[[package]]
-name = "sha1_smol"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae1a47186c03a32177042e55dbc5fd5aee900b8e0069a8d70fba96a9375cd012"
 
 [[package]]
 name = "sha2"
